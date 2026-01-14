@@ -29,7 +29,27 @@ const preloadCSV = (csvFile) => {
           const lonB = parseFloat(b['long']);
           return lonA - lonB;
         });
-        resolve(rows);
+        // Merge points that are extremely close (within ~10 meters)
+        const mergedRows = [];
+        const threshold = 0.0003;
+        for (let i = 0; i < rows.length; i++) {
+            const current = rows[i];
+            const latCurrent = parseFloat(current['lat']);
+            const lonCurrent = parseFloat(current['long']);
+            if (mergedRows.length === 0) {
+                mergedRows.push(current);
+            } else {
+                const last = mergedRows[mergedRows.length - 1];
+                const latLast = parseFloat(last['lat']);
+                const lonLast = parseFloat(last['long']);
+                if (Math.abs(latCurrent - latLast) < threshold && Math.abs(lonCurrent - lonLast) < threshold) {
+                    continue;
+                } else {
+                    mergedRows.push(current);
+                }
+            }
+        }
+        resolve(mergedRows);
       })
       .on('error', reject);
   });
@@ -44,7 +64,7 @@ preloadCSV('data_cleaned_titles.csv').then(data => {
     console.error('Failed to preload data_cleaned_titles.csv:', err);
 });
 
-const minZoomDetail = 17;
+const minZoomDetail = 18;
 app.get('/data', (req, res) => {
   if (!req.query.zoom) {
     return res.status(400).json({ error: 'Missing zoom parameter' });
@@ -56,7 +76,13 @@ app.get('/data', (req, res) => {
   if (zoom > minZoomDetail) {  // Load data in the view window only for high zoom levels
     const bbox = req.query.bbox ? req.query.bbox.split(',').map(parseFloat) : null;
     if (bbox && bbox.length === 4) {
-        const [south, west, north, east] = bbox;
+        let [south, west, north, east] = bbox;
+        // Pad the bbox slightly to reduce endpoint calls
+        const padAmount = 0.001;
+        south -= padAmount;
+        west -= padAmount;
+        north += padAmount;
+        east += padAmount;
         const filteredData = flickrData.filter(row => {
             const lat = parseFloat(row.lat);
             const lon = parseFloat(row.long);
