@@ -13,6 +13,11 @@ function clearMarkers() {
 }
 
 let lastBbox = null;
+const icon = L.icon({
+    iconUrl: 'https://images.emojiterra.com/google/noto-emoji/unicode-16.0/color/512px/1f4cd.png',
+    iconSize: [25, 25],
+    shadowUrl: null,
+});
 function loadData() {
   const zoom = map.getZoom();
   const bbox = map.getBounds();
@@ -40,7 +45,7 @@ function loadData() {
         const lat = parseFloat(row.lat);
         const lon = parseFloat(row.long);
         if (!isNaN(lat) && !isNaN(lon)) {
-          const marker = L.marker([lat, lon]).addTo(map)
+          const marker = L.marker([lat, lon], { icon: icon }).addTo(map)
             .bindPopup(Object.entries(row).map(([k, v]) => `<b>${k}</b>: ${v}`).join('<br>'));
           markers.push(marker);
         }
