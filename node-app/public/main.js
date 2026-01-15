@@ -34,7 +34,7 @@ function loadData() {
   clearMarkers();
   const bboxParam = `${bbox.getSouth()},${bbox.getWest()},${bbox.getNorth()},${bbox.getEast()}`;
   let url = `/data?zoom=${zoom}`;
-  if (zoom > 18) {
+  if (zoom > 17) {
     url += `&bbox=${bboxParam}`;
   } else {
     url += `&algorithm=${document.getElementById('algorithm').value}`;
@@ -58,8 +58,25 @@ map.on('zoomend', loadData);
 map.on('moveend', loadData);
 
 // Reload data when clustering algorithm changes
-document.getElementById('algorithm').addEventListener('change', () => {
-  loadData();
+document.getElementById('algorithm').addEventListener('change', () => { loadData(); });
+
+// Popup on marker click will request original photo from flickr
+map.on('popupopen', function(e) {
+    // Retrieve userId and photoId from popup content
+    const popupContent = e.popup.getContent();
+    const userIdMatch = popupContent.match(/<b>user<\/b>:\s*(\d+)@N*(\d+)/);
+    const photoIdMatch = popupContent.match(/<b>id<\/b>:\s*(\d+)/);
+    if (userIdMatch && photoIdMatch) {
+        const userId = userIdMatch[1] + '@N' + userIdMatch[2];
+        const photoId = photoIdMatch[1];
+        fetch(`/photo?userId=${userId}&photoId=${photoId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.imageUrl) {
+                    e.popup.setContent(`${popupContent}<br><img src="${data.imageUrl}" alt="Original Photo" style="max-width:100%;">`);
+                }
+            });
+    }
 });
 
 // Initial load

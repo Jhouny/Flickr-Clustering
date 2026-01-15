@@ -3,7 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { parse } = require('csv-parse');
-
+const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = 3000;
@@ -64,7 +64,7 @@ preloadCSV('data_cleaned_titles.csv').then(data => {
     console.error('Failed to preload data_cleaned_titles.csv:', err);
 });
 
-const minZoomDetail = 18;
+const minZoomDetail = 17;
 app.get('/data', (req, res) => {
   if (!req.query.zoom) {
     return res.status(400).json({ error: 'Missing zoom parameter' });
@@ -117,6 +117,50 @@ app.get('/data', (req, res) => {
     .on('error', (err) => {
       res.status(500).json({ error: err.message });
     });
+});
+
+// Request original photograph from flickr.com
+async function getFlickrPhoto(userId, photoId) {
+    const url = `https://www.flickr.com/photos/${userId}/${photoId}`;
+    console.log(`Fetching photo from URL: ${url}`);
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    await page.setRequestInterception(true);
+
+    let imageUrl = null;
+    // Listen for requests with the photoId in the URL
+    page.on('request', request => {
+        const reqUrl = request.url();
+        if (reqUrl.includes(photoId) && (reqUrl.endsWith('.jpg') || reqUrl.endsWith('.png'))) {
+            imageUrl = reqUrl;
+            request.abort();  // Stop further processing
+        } else {
+            request.continue();
+        }
+    });
+
+    await page.goto(url, { waitUntil: 'networkidle2' });
+
+    await browser.close();
+    return imageUrl; 
+}
+
+app.get('/photo', async (req, res) => {
+    const { userId, photoId } = req.query;
+    console.log(`Received photo request for userId: ${userId}, photoId: ${photoId}`);
+    if (!userId || !photoId) {
+        return res.status(400).json({ error: 'Missing userId or photoId parameter' });
+    }
+    try {
+        const imageUrl = await getFlickrPhoto(userId, photoId);
+        if (imageUrl) {
+            res.json({ imageUrl });
+        } else {
+            res.status(404).json({ error: 'Photo not found' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 app.listen(PORT, () => {
