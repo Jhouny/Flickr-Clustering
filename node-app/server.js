@@ -92,23 +92,26 @@ app.get('/data', (req, res) => {
     }
     return res.json([]);
   }
-
   // Otherwise, load and serve the clustered dataset, ordered and filtered by n_points and zoom
   const csvPath = path.join(__dirname, '../data', 'centroids.csv');
   const results = [];
+  const algorithm = (req.query.algorithm || 'kmean').toLowerCase();
   fs.createReadStream(csvPath)
     .pipe(parse({ columns: true, trim: true }))
     .on('data', (row) => {
       results.push(row);
     })
     .on('end', () => {
+      // Filter by algorithm
+      const filteredByAlgorithm = results.filter(row => row.algo === algorithm);
       // Sort by n_points descending (convert to number)
-      results.sort((a, b) => (parseInt(b.n_points, 10) || 0) - (parseInt(a.n_points, 10) || 0));
-      let limit = 5;
+      filteredByAlgorithm.sort((a, b) => (parseInt(b.n_points, 10) || 0) - (parseInt(a.n_points, 10) || 0));
+      let limit = 3;
       if (zoom >= 5 && zoom < 10) limit = 10;
-      else if (zoom >= 10 && zoom <= minZoomDetail) limit = 15;
+      else if (zoom >= 10 && zoom <= 13) limit = 15;
+      else if (zoom > 13 && zoom <= minZoomDetail) limit = 1000;
       // For zoom > minZoomDetail, show all
-      const filtered = results.slice(0, limit);
+      const filtered = filteredByAlgorithm.slice(0, limit);
       res.json(filtered);
     })
     .on('error', (err) => {

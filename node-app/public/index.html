@@ -6,11 +6,48 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    #map { height: 100vh; width: 100vw; }
+    body {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      flex-direction: row;
+    }
+    #map {
+      flex: 1 1 0;
+      height: 100vh;
+      min-width: 0;
+    }
+    #side-menu {
+      width: 320px;
+      max-width: 100vw;
+      background: #f8f8f8;
+      border-left: 1px solid #ccc;
+      box-sizing: border-box;
+      padding: 24px 16px;
+      overflow-y: auto;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
   </style>
 </head>
 <body>
-  <div id="map"></div>
+    <div id="map"></div>
+    <div id="side-menu">
+      <div id="algorithm-selector">
+          <label for="algorithm">Clustering Algorithm:</label>
+          <select id="algorithm">
+              <option value="kmean">K-Means</option>
+              <option value="dbscan">DBSCAN</option>
+              <option value="hdbscan">HDBSCAN</option>
+          </select>
+      </div>
+    </div>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="main.js"></script>
 </body>

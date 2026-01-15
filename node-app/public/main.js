@@ -31,12 +31,13 @@ function loadData() {
     ) { return; }
   }
   lastBbox = bbox;
-  console.log(`Fetching new data for zoom ${zoom} and bbox ${bbox.toBBoxString()}`);
   clearMarkers();
   const bboxParam = `${bbox.getSouth()},${bbox.getWest()},${bbox.getNorth()},${bbox.getEast()}`;
   let url = `/data?zoom=${zoom}`;
   if (zoom > 18) {
     url += `&bbox=${bboxParam}`;
+  } else {
+    url += `&algorithm=${document.getElementById('algorithm').value}`;
   }
   fetch(url)
     .then(res => res.json())
@@ -55,6 +56,11 @@ function loadData() {
 
 map.on('zoomend', loadData);
 map.on('moveend', loadData);
+
+// Reload data when clustering algorithm changes
+document.getElementById('algorithm').addEventListener('change', () => {
+  loadData();
+});
 
 // Initial load
 loadData();
