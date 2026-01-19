@@ -6,18 +6,38 @@ const puppeteer = require('puppeteer');
 
 // Preload and sort large dataset (e.g., flickr_dataset.csv)
 const preloadCSV = (csvFile) => {
-  return new Promise((resolve, reject) => {
-    const csvPath = path.join(__dirname, '../data', csvFile);
-    const rows = [];
-    fs.createReadStream(csvPath)
-      .pipe(parse({ columns: true, trim: true }))
-      .on('data', (row) => {
-        rows.push(row);
-      })
-      .on('end', () => { resolve(rows); })
-      .on('error', reject);
-  });
+    return new Promise((resolve, reject) => {
+        const csvPath = path.join(__dirname, '../data', csvFile);
+        const rows = [];
+        fs.createReadStream(csvPath)
+            .pipe(parse({ columns: true, trim: true }))
+            .on('data', (row) => {
+                rows.push(row);
+            })
+            .on('end', () => { resolve(rows); })
+            .on('error', reject);
+    });
 };
+
+// Load already crawled user/id pairs from the output CSV
+async function loadCompletedPairs(outputCsv) {
+    return new Promise((resolve, reject) => {
+        const completed = new Set();
+        if (!fs.existsSync(outputCsv)) {
+            resolve(completed);
+            return;
+        }
+        fs.createReadStream(outputCsv)
+            .pipe(parse({ columns: true, trim: true }))
+            .on('data', (row) => {
+                if (row.user && row.id && row.photo_url && row.photo_url !== 'null' && row.photo_url !== '') {
+                    completed.add(`${row.user}|${row.id}`);
+                }
+            })
+            .on('end', () => resolve(completed))
+            .on('error', reject);
+    });
+}
 
 
 // Preload flickr_dataset.csv at server start
@@ -49,46 +69,84 @@ async function getFlickrPhoto(userId, photoId) {
     return imageUrl; 
 }
 
-fs.appendFileSync(path.join(__dirname, '../data', 'flickr_photo_urls.csv'), 'id,user,photo_url\n');
+
+// Helper: async pool for concurrency control
+async function asyncPool(poolLimit, array, iteratorFn) {
+    const ret = [];
+    const executing = [];
+    for (const item of array) {
+        const p = Promise.resolve().then(() => iteratorFn(item));
+        ret.push(p);
+        if (poolLimit <= array.length) {
+            const e = p.then(() => executing.splice(executing.indexOf(e), 1));
+            executing.push(e);
+            if (executing.length >= poolLimit) {
+                await Promise.race(executing);
+            }
+        }
+    }
+    return Promise.all(ret);
+}
+
 
 (async () => {
     try {
+        const outputCsvPath = path.join(__dirname, '../data', 'flickr_photo_urls.csv');
         flickrData = await preloadCSV('data_cleaned_titles.csv');
         console.log('data_cleaned_titles.csv preloaded.');
-        const total = flickrData.length;
+        const completedPairs = await loadCompletedPairs(outputCsvPath);
+        console.log(`Loaded ${completedPairs.size} completed pairs from output CSV.`);
+
+        // Filter out already completed pairs
+        const toCrawl = flickrData.filter(row => row.user && row.id && !completedPairs.has(`${row.user}|${row.id}`));
+        const total = toCrawl.length;
         let processed = 0;
         let startTime = Date.now();
-        for (const row of flickrData) {
-            const itemStart = Date.now();
+        const results = [];
+        const FLUSH_INTERVAL = 10; // Write to disk every 10 processed items
+
+        // Create output CSV with header if it doesn't exist
+        if (!fs.existsSync(outputCsvPath)) {
+            console.log('Creating new output CSV with header.');
+            fs.writeFileSync(outputCsvPath, 'user,id,photo_url\n');
+        }
+
+        await asyncPool(4, toCrawl, async (row) => { // 4 = concurrency limit
             try {
                 if (!row.user || !row.id) {
                     console.warn(`Missing user or id for row: ${JSON.stringify(row)}`);
-                    continue;
+                    return;
                 }
                 const photoUrl = await getFlickrPhoto(row.user, Number(row.id));
-                // Try to fetch the photo url without the trailing '_s' to check if a larger image exists
                 const largerPhotoUrl = photoUrl ? photoUrl.replace('_s.', '.') : null;
-                // Make a HEAD request to check if the larger image exists
                 let finalPhotoUrl = photoUrl;
                 if (largerPhotoUrl) {
                     const response = await fetch(largerPhotoUrl, { method: 'HEAD' });
                     if (response.ok) {
                         finalPhotoUrl = largerPhotoUrl;
-                    } // else keep the original small photo URL
+                    }
                 }
-                // Save the url to a new CSV along with its photo and user IDs
-                const outputLine = `${row.user},${Number(row.id)},${finalPhotoUrl}\n`;
-                fs.appendFileSync(path.join(__dirname, '../data', 'flickr_photo_urls.csv'), outputLine);
+                results.push(`${row.user},${Number(row.id)},${finalPhotoUrl}\n`);
             } catch (err) {
                 console.error(`Failed to fetch photo for photo_id ${Number(row.id)}:`, err);
             }
             processed++;
             const itemsLeft = total - processed;
-            const elapsed = (Date.now() - startTime) / 1000; // seconds
+            const elapsed = (Date.now() - startTime) / 1000;
             const avgTimePerItem = elapsed / processed;
-            const eta = itemsLeft * avgTimePerItem; // seconds
-            // Show progress and ETA in console
+            const eta = itemsLeft * avgTimePerItem;
             console.log(`Processed: ${processed}/${total} | Items left: ${itemsLeft} | ETA: ${formatTime(eta)}`);
+
+            // Flush results to disk every FLUSH_INTERVAL processed items
+            if (results.length >= FLUSH_INTERVAL) {
+                fs.appendFileSync(outputCsvPath, results.join(''));
+                results.length = 0; // Clear the array
+                results.splice(0, results.length); // Clear the array
+            }
+        });
+        // Final flush for any remaining results
+        if (results.length > 0) {
+            fs.appendFileSync(outputCsvPath, results.join(''));
         }
     } catch (err) {
         console.error('Failed to preload data_cleaned_titles.csv:', err);
