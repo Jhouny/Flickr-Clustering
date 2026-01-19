@@ -50,11 +50,16 @@ async function getFlickrPhoto(userId, photoId) {
 }
 
 fs.appendFileSync(path.join(__dirname, '../data', 'flickr_photo_urls.csv'), 'id,user,photo_url\n');
+
 (async () => {
     try {
         flickrData = await preloadCSV('data_cleaned_titles.csv');
         console.log('data_cleaned_titles.csv preloaded.');
+        const total = flickrData.length;
+        let processed = 0;
+        let startTime = Date.now();
         for (const row of flickrData) {
+            const itemStart = Date.now();
             try {
                 if (!row.user || !row.id) {
                     console.warn(`Missing user or id for row: ${JSON.stringify(row)}`);
@@ -71,16 +76,30 @@ fs.appendFileSync(path.join(__dirname, '../data', 'flickr_photo_urls.csv'), 'id,
                         finalPhotoUrl = largerPhotoUrl;
                     } // else keep the original small photo URL
                 }
-                
-                console.log(`Photo URL for photo_id ${Number(row.id)}: ${finalPhotoUrl}\n`);
                 // Save the url to a new CSV along with its photo and user IDs
                 const outputLine = `${row.user},${Number(row.id)},${finalPhotoUrl}\n`;
                 fs.appendFileSync(path.join(__dirname, '../data', 'flickr_photo_urls.csv'), outputLine);
             } catch (err) {
                 console.error(`Failed to fetch photo for photo_id ${Number(row.id)}:`, err);
             }
+            processed++;
+            const itemsLeft = total - processed;
+            const elapsed = (Date.now() - startTime) / 1000; // seconds
+            const avgTimePerItem = elapsed / processed;
+            const eta = itemsLeft * avgTimePerItem; // seconds
+            // Show progress and ETA in console
+            console.log(`Processed: ${processed}/${total} | Items left: ${itemsLeft} | ETA: ${formatTime(eta)}`);
         }
     } catch (err) {
         console.error('Failed to preload data_cleaned_titles.csv:', err);
     }
 })();
+
+// Helper to format seconds as HH:MM:SS
+function formatTime(seconds) {
+    seconds = Math.max(0, Math.round(seconds));
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
