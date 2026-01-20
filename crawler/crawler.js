@@ -30,8 +30,8 @@ async function loadCompletedPairs(outputCsv) {
         fs.createReadStream(outputCsv)
             .pipe(parse({ columns: true, trim: true }))
             .on('data', (row) => {
-                if (row.user && row.id && row.photo_url && row.photo_url !== 'null' && row.photo_url !== '') {
-                    completed.add(`${row.user}|${row.id}`);
+                if (row.user && row.id && row.photo_url && row.photo_url !== '') {
+                    completed.add(`${Number(row.id)}`);
                 }
             })
             .on('end', () => resolve(completed))
@@ -91,24 +91,30 @@ async function asyncPool(poolLimit, array, iteratorFn) {
 
 (async () => {
     try {
+        const cleanedOutputCsvPath = path.join(__dirname, '../data', 'flickr_photo_urls_cleaned.csv');
         const outputCsvPath = path.join(__dirname, '../data', 'flickr_photo_urls.csv');
         flickrData = await preloadCSV('data_cleaned_titles.csv');
         console.log('data_cleaned_titles.csv preloaded.');
-        const completedPairs = await loadCompletedPairs(outputCsvPath);
+        const completedPairs = await loadCompletedPairs(cleanedOutputCsvPath);
         console.log(`Loaded ${completedPairs.size} completed pairs from output CSV.`);
 
         // Filter out already completed pairs
-        const toCrawl = flickrData.filter(row => row.user && row.id && !completedPairs.has(`${row.user}|${row.id}`));
+        const toCrawl = flickrData.filter(row => {
+            return row.user && row.id && !completedPairs.has(`${Number(row.id)}`);
+        });
         const total = toCrawl.length;
         let processed = 0;
         let startTime = Date.now();
         const results = [];
         const FLUSH_INTERVAL = 10; // Write to disk every 10 processed items
 
-        // Create output CSV with header if it doesn't exist
+        // Create output CSV with header if it doesn't exist and copy cleaned results over
         if (!fs.existsSync(outputCsvPath)) {
-            console.log('Creating new output CSV with header.');
-            fs.writeFileSync(outputCsvPath, 'user,id,photo_url\n');
+            if (fs.existsSync(cleanedOutputCsvPath)) {
+                const cleanedData = fs.readFileSync(cleanedOutputCsvPath, 'utf-8');
+                fs.appendFileSync(outputCsvPath, cleanedData);
+                console.log('Copied cleaned results to new output CSV.');
+            }
         }
 
         await asyncPool(4, toCrawl, async (row) => { // 4 = concurrency limit
