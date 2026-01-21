@@ -3,7 +3,6 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { parse } = require('csv-parse');
-const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = 3000;
@@ -59,6 +58,7 @@ const preloadCSV = (csvFile) => {
 let flickrData = null;
 preloadCSV('data_cleaned_titles.csv').then(data => {
     flickrData = data;
+    
     console.log('data_cleaned_titles.csv preloaded and sorted.');
 }).catch(err => {
     console.error('Failed to preload data_cleaned_titles.csv:', err);
@@ -119,40 +119,27 @@ app.get('/data', (req, res) => {
     });
 });
 
-// Request original photograph from flickr.com
-async function getFlickrPhoto(userId, photoId) {
+// Retrieve photo URL from the indexed CSV
+async function getPhotoURL(userId, photoId) {
     const url = `https://www.flickr.com/photos/${userId}/${photoId}`;
-    console.log(`Fetching photo from URL: ${url}`);
-    const browser = await puppeteer.launch();
-    const page = await browser.newPage();
-    await page.setRequestInterception(true);
-
     let imageUrl = null;
-    // Listen for requests with the photoId in the URL
-    page.on('request', request => {
-        const reqUrl = request.url();
-        if (reqUrl.includes(photoId) && (reqUrl.endsWith('.jpg') || reqUrl.endsWith('.png'))) {
-            imageUrl = reqUrl;
-            request.abort();  // Stop further processing
-        } else {
-            request.continue();
+    // Find the photo in the preloaded flickrData
+    for (const row of flickrData) {
+        if (row.user_id === userId && row.photo_id === photoId) {
+            imageUrl = row.image_url;
+            break;
         }
-    });
-
-    await page.goto(url, { waitUntil: 'networkidle2' });
-
-    await browser.close();
+    }
     return imageUrl; 
 }
 
 app.get('/photo', async (req, res) => {
     const { userId, photoId } = req.query;
-    console.log(`Received photo request for userId: ${userId}, photoId: ${photoId}`);
     if (!userId || !photoId) {
         return res.status(400).json({ error: 'Missing userId or photoId parameter' });
     }
     try {
-        const imageUrl = await getFlickrPhoto(userId, photoId);
+        const imageUrl = await getPhotoURL(userId, photoId);
         if (imageUrl) {
             res.json({ imageUrl });
         } else {
