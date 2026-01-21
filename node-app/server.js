@@ -106,13 +106,7 @@ app.get('/data', (req, res) => {
       const filteredByAlgorithm = results.filter(row => row.algo === algorithm);
       // Sort by n_points descending (convert to number)
       filteredByAlgorithm.sort((a, b) => (parseInt(b.n_points, 10) || 0) - (parseInt(a.n_points, 10) || 0));
-      let limit = 3;
-      if (zoom >= 5 && zoom < 10) limit = 10;
-      else if (zoom >= 10 && zoom <= 13) limit = 15;
-      else if (zoom > 13 && zoom <= minZoomDetail) limit = 1000;
-      // For zoom > minZoomDetail, show all
-      const filtered = filteredByAlgorithm.slice(0, limit);
-      res.json(filtered);
+      res.json(filteredByAlgorithm);
     })
     .on('error', (err) => {
       res.status(500).json({ error: err.message });

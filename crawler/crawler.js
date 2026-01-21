@@ -30,7 +30,7 @@ async function loadCompletedPairs(outputCsv) {
         fs.createReadStream(outputCsv)
             .pipe(parse({ columns: true, trim: true }))
             .on('data', (row) => {
-                if (row.user && row.id && row.photo_url && row.photo_url !== '') {
+                if (row.user && row.id) {
                     completed.add(`${Number(row.id)}`);
                 }
             })
