@@ -106,7 +106,7 @@ async function asyncPool(poolLimit, array, iteratorFn) {
         let processed = 0;
         let startTime = Date.now();
         const results = [];
-        const FLUSH_INTERVAL = 10; // Write to disk every 10 processed items
+        const FLUSH_INTERVAL = 24; // Write to disk every 24 processed items
 
         // Create output CSV with header if it doesn't exist and copy cleaned results over
         if (!fs.existsSync(outputCsvPath)) {
@@ -117,7 +117,7 @@ async function asyncPool(poolLimit, array, iteratorFn) {
             }
         }
 
-        await asyncPool(4, toCrawl, async (row) => { // 4 = concurrency limit
+        await asyncPool(8, toCrawl, async (row) => { // 8 = concurrency limit
             try {
                 if (!row.user || !row.id) {
                     console.warn(`Missing user or id for row: ${JSON.stringify(row)}`);
