@@ -27,6 +27,29 @@ body {
     justify-content: space-between;
 }
 
+#algorithm-selector {
+    margin-bottom: 24px;
+}
+
+#algorithm-selector label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
+#algorithm-selector select {
+    width: 100%;
+    padding: 8px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+#algorithm-selector select option {
+    padding: 8px;
+    border: none;
+}
+
 #photo-embed {
     padding: 12px;
     border: 1px solid #ccc;
