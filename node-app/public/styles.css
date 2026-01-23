@@ -7,6 +7,7 @@ body {
     overflow: hidden;
     display: flex;
     flex-direction: row;
+    font-family: monospace, Arial, sans-serif;
 }
 #map {
     flex: 1 1 0;
@@ -34,7 +35,7 @@ body {
 #algorithm-selector label {
     display: block;
     margin-bottom: 8px;
-    font-weight: bold;
+    font-weight: 600;
 }
 
 #algorithm-selector select {
