@@ -5,7 +5,7 @@ const path = require('path');
 const { parse } = require('csv-parse');
 
 const app = express();
-const PORT = 3000;
+const PORT = 3001;
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Preload and sort large dataset (e.g., flickr_dataset.csv)
@@ -113,19 +113,14 @@ app.get('/data', (req, res) => {
     });
 });
 
-// Retrieve photo URL from the indexed CSV
-async function getPhotoURL(userId, photoId) {
-    const url = `https://www.flickr.com/photos/${userId}/${photoId}`;
-    let imageUrl = null;
-    // Find the photo in the preloaded flickrData
-    for (const row of flickrData) {
-        if (row.user_id === userId && row.photo_id === photoId) {
-            imageUrl = row.image_url;
-            break;
-        }
-    }
-    return imageUrl; 
-}
+// Load image URLs from crawled flickr dataset
+let photoURLs = {};
+fs.createReadStream(path.join(__dirname, '../data', 'flickr_photo_urls_cleaned.csv'))
+  .pipe(parse({ columns: true, trim: true }))
+  .on('data', (row) => {
+    const key = `${row.user}_${Number(row.id)}`;
+    photoURLs[key] = row.photo_url;
+  });
 
 app.get('/photo', async (req, res) => {
     const { userId, photoId } = req.query;
@@ -133,7 +128,8 @@ app.get('/photo', async (req, res) => {
         return res.status(400).json({ error: 'Missing userId or photoId parameter' });
     }
     try {
-        const imageUrl = await getPhotoURL(userId, photoId);
+        const key = `${userId}_${Number(photoId)}`;
+        const imageUrl = photoURLs[key];
         if (imageUrl) {
             res.json({ imageUrl });
         } else {

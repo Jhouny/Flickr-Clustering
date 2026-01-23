@@ -73,10 +73,44 @@ map.on('popupopen', function(e) {
             .then(res => res.json())
             .then(data => {
                 if (data.imageUrl) {
-                    e.popup.setContent(`${popupContent}<br><img src="${data.imageUrl}" alt="Original Photo" style="max-width:100%;">`);
+                    document.getElementById('photo-container').innerHTML = `<img src="${data.imageUrl}" alt="Photo" style="max-width:100%;">`;
+                } else {
+                    document.getElementById('photo-container').innerHTML = '<img src="static/no-image-icon-23485.png" alt="No image available"/>';
                 }
             });
     }
+});
+
+// Zoom-in photo overlay
+document.getElementById('photo-embed').addEventListener('click', (e) => {
+    const phEmb = document.getElementById('photo-embed');
+    if (phEmb.classList.contains('overlay')) {
+        phEmb.classList.remove('overlay');
+        document.getElementById('photo-container').classList.remove('overlay');
+    } else {
+        if (phEmb.innerHTML.trim() === '' || phEmb.innerHTML.includes('no-image-icon-23485.png')) {
+            return; // Do not activate overlay if no image is present
+        }
+        phEmb.classList.add('overlay');
+        document.getElementById('photo-container').classList.add('overlay');
+    }
+});
+
+// Toggle overlay if clicked outside image
+document.addEventListener('click', (e) => {
+    const target = e.target;
+    const phEmb = document.getElementById('photo-embed');
+    if (!phEmb.contains(target) && phEmb.classList.contains('overlay')) {
+        phEmb.classList.remove('overlay');
+        document.getElementById('photo-container').classList.remove('overlay');
+    }
+});
+
+document.getElementById('photo-embed').addEventListener('mouseover', (e) => {
+    if (document.getElementById('photo-embed').innerHTML.trim() === '' || document.getElementById('photo-embed').innerHTML.includes('no-image-icon-23485.png')) {
+        return; // Do not change cursor if no image is present
+    }
+    document.getElementById('photo-embed').style.cursor = 'zoom-in';
 });
 
 // Initial load
