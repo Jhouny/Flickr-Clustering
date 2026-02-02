@@ -93,20 +93,19 @@ app.get('/data', (req, res) => {
     return res.json([]);
   }
   // Otherwise, load and serve the clustered dataset, ordered and filtered by n_points and zoom
-  const csvPath = path.join(__dirname, '../data', 'centroids.csv');
   const results = [];
   const algorithm = (req.query.algorithm || 'kmean').toLowerCase();
+  const csvPath = path.join(__dirname, '../data', `${algorithm}_convex_hulls.csv`);
+  if (!['kmean', 'dbscan', 'hdbscan'].includes(algorithm)) {
+      return res.status(400).json({ error: 'Invalid algorithm parameter' });
+  }
   fs.createReadStream(csvPath)
     .pipe(parse({ columns: true, trim: true }))
     .on('data', (row) => {
       results.push(row);
     })
     .on('end', () => {
-      // Filter by algorithm
-      const filteredByAlgorithm = results.filter(row => row.algo === algorithm);
-      // Sort by n_points descending (convert to number)
-      filteredByAlgorithm.sort((a, b) => (parseInt(b.n_points, 10) || 0) - (parseInt(a.n_points, 10) || 0));
-      res.json(filteredByAlgorithm);
+      res.json(results);
     })
     .on('error', (err) => {
       res.status(500).json({ error: err.message });

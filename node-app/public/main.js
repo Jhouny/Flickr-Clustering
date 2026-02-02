@@ -36,22 +36,54 @@ function loadData() {
   let url = `/data?zoom=${zoom}`;
   if (zoom > 17) {
     url += `&bbox=${bboxParam}`;
+    fetch(url)
+        .then(res => res.json())
+        .then(data => {
+        data.forEach(row => {
+            const lat = parseFloat(row.lat);
+            const lon = parseFloat(row.long);
+            if (!isNaN(lat) && !isNaN(lon)) {
+                const marker = L.marker([lat, lon], { icon: icon }).addTo(map)
+                .bindPopup(Object.entries(row).map(([k, v]) => `<b>${k}</b>: ${v}`).join('<br>'));
+                markers.push(marker);
+            }
+        });
+    });
   } else {
     url += `&algorithm=${document.getElementById('algorithm').value}`;
+    fetch(url)
+        .then(res => res.json())
+        .then(data => {
+            // Data contains (cluster_id, list([point_lat, point_lon], ...))
+            data.forEach(row => {
+                const cluster_id = row.cluster_id;
+                console.log(cluster_id);
+                if (!row.convex_hull) { return; }
+                let points;
+                try {
+                    points = JSON.parse(row.convex_hull);
+                } catch (e) {
+                    console.error('Error parsing convex_hull for cluster_id', cluster_id, e);
+                    return;
+                }
+                if (points && points.length >= 3) {
+                    const latlngs = points.map(pt => [pt[0], pt[1]]);
+                    const polygon = L.polygon(latlngs, { color: 'blue', weight: 1, fillOpacity: 0.2 }).addTo(map)
+                    .bindPopup(`<b>Cluster ID</b>: ${cluster_id}<br>`);
+                    markers.push(polygon);
+                } else if (points && points.length > 0) {
+                    // If less than 3 points, just plot them as markers
+                    points.forEach(pt => {
+                        const lat = pt[0];
+                        const lon = pt[1];
+                        const marker = L.marker([lat, lon], { icon: icon }).addTo(map)
+                        .bindPopup(`<b>Cluster ID</b>: ${cluster_id}<br>`);
+                        markers.push(marker);
+                    });
+                }
+            });
+        });
   }
-  fetch(url)
-    .then(res => res.json())
-    .then(data => {
-      data.forEach(row => {
-        const lat = parseFloat(row.lat);
-        const lon = parseFloat(row.long);
-        if (!isNaN(lat) && !isNaN(lon)) {
-          const marker = L.marker([lat, lon], { icon: icon }).addTo(map)
-            .bindPopup(Object.entries(row).map(([k, v]) => `<b>${k}</b>: ${v}`).join('<br>'));
-          markers.push(marker);
-        }
-      });
-    });
 }
 
 map.on('zoomend', loadData);
