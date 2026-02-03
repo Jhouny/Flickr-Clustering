@@ -13,11 +13,18 @@ function clearMarkers() {
 }
 
 let lastBbox = null;
-const icon = L.icon({
-    iconUrl: 'https://images.emojiterra.com/google/noto-emoji/unicode-16.0/color/512px/1f4cd.png',
-    iconSize: [25, 25],
-    shadowUrl: null,
-});
+
+function createColoredIcon(color) {
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='25' height='25' viewBox='0 0 25 25'>
+      <circle cx='12.5' cy='12.5' r='10' fill='${color}' stroke='black' stroke-width='2'/>
+      <circle cx='12.5' cy='12.5' r='5' fill='white' />
+    </svg>`;
+    return L.icon({
+        iconUrl: 'data:image/svg+xml;base64,' + btoa(svg),
+        iconSize: [25, 25],
+        shadowUrl: null,
+    });
+}
 function loadData() {
   const zoom = map.getZoom();
   const bbox = map.getBounds();
@@ -43,7 +50,7 @@ function loadData() {
             const lat = parseFloat(row.lat);
             const lon = parseFloat(row.long);
             if (!isNaN(lat) && !isNaN(lon)) {
-                const marker = L.marker([lat, lon], { icon: icon }).addTo(map)
+                const marker = L.marker([lat, lon], { icon: createColoredIcon(row.color) }).addTo(map)
                 .bindPopup(Object.entries(row).map(([k, v]) => `<b>${k}</b>: ${v}`).join('<br>'));
                 markers.push(marker);
             }
@@ -68,7 +75,7 @@ function loadData() {
                 }
                 if (points && points.length >= 3) {
                     const latlngs = points.map(pt => [pt[0], pt[1]]);
-                    const polygon = L.polygon(latlngs, { color: 'blue', weight: 1, fillOpacity: 0.2 }).addTo(map)
+                    const polygon = L.polygon(latlngs, { color: row.color, weight: 1, fillOpacity: 0.25 }).addTo(map)
                     .bindPopup(`<b>Cluster ID</b>: ${cluster_id}<br>`);
                     markers.push(polygon);
                 } else if (points && points.length > 0) {
@@ -76,7 +83,7 @@ function loadData() {
                     points.forEach(pt => {
                         const lat = pt[0];
                         const lon = pt[1];
-                        const marker = L.marker([lat, lon], { icon: icon }).addTo(map)
+                        const marker = L.marker([lat, lon], { icon: createColoredIcon(row.color) }).addTo(map)
                         .bindPopup(`<b>Cluster ID</b>: ${cluster_id}<br>`);
                         markers.push(marker);
                     });

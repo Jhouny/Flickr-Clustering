@@ -3,13 +3,14 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { parse } = require('csv-parse');
+const { get } = require('http');
 
 const app = express();
 const PORT = 3001;
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Preload and sort large dataset (e.g., flickr_dataset.csv)
-const preloadCSV = (csvFile) => {
+const preloadCSV = (csvFile, filter=true) => {
   return new Promise((resolve, reject) => {
     const csvPath = path.join(__dirname, '../data', csvFile);
     const rows = [];
@@ -19,6 +20,8 @@ const preloadCSV = (csvFile) => {
         rows.push(row);
       })
       .on('end', () => {
+        if (!filter) { return resolve(rows); }
+
         // Sort by latitude, then longitude
         rows.sort((a, b) => {
           const latA = parseFloat(a['lat']);
@@ -30,7 +33,7 @@ const preloadCSV = (csvFile) => {
         });
         // Merge points that are extremely close (within ~10 meters)
         const mergedRows = [];
-        const threshold = 0.0003;
+        const threshold = 0.0006;
         for (let i = 0; i < rows.length; i++) {
             const current = rows[i];
             const latCurrent = parseFloat(current['lat']);
@@ -64,15 +67,35 @@ preloadCSV('data_cleaned_titles.csv').then(data => {
     console.error('Failed to preload data_cleaned_titles.csv:', err);
 });
 
+// Create color mapping for clusters and markers
+function getColor(clusterId) {
+    const colors = ['red', 'blue', 'green', 'orange', 'purple', 'cyan', 'magenta', 'yellow', 'brown', 'pink'];  // Must be usable in Leaflet markers
+    return colors[Number(clusterId) % colors.length];
+}
+
+// Preload markers' clustering repartition from predictions.csv
+let clusterData = {};
+preloadCSV('predictions.csv', false).then(data => {
+    data.forEach(row => {
+        clusterData[row.id] = {
+    // Create a new map instance
+            kmean: row.kmean,
+            dbscan: row.dbscan,
+            hdbscan: row.hdbscan
+        };
+    });
+    console.log('predictions.csv preloaded.');
+}).catch(err => {
+    console.error('Failed to preload predictions.csv:', err);
+});
+
+// Endpoint to get data based on zoom level and bounding box
 const minZoomDetail = 17;
 app.get('/data', (req, res) => {
-  if (!req.query.zoom) {
-    return res.status(400).json({ error: 'Missing zoom parameter' });
-  }
-  if (!req.query.bbox && parseInt(req.query.zoom, 10) > minZoomDetail) {
-    return res.status(400).json({ error: `Missing bbox parameter for zoom levels > ${minZoomDetail}` });
-  }
-  const zoom = parseInt(req.query.zoom, 10) || 0;
+  if (!req.query.zoom) { return res.status(400).json({ error: 'Missing zoom parameter' }); }
+  if (!req.query.bbox && parseInt(req.query.zoom, 10) > minZoomDetail) { return res.status(400).json({ error: `Missing bbox parameter for zoom levels > ${minZoomDetail}` }); }
+
+  const zoom = parseInt(req.query.zoom, 10) || 3;
   if (zoom > minZoomDetail) {  // Load data in the view window only for high zoom levels
     const bbox = req.query.bbox ? req.query.bbox.split(',').map(parseFloat) : null;
     if (bbox && bbox.length === 4) {
@@ -88,6 +111,14 @@ app.get('/data', (req, res) => {
             const lon = parseFloat(row.long);
             return lat >= south && lat <= north && lon >= west && lon <= east;
         });
+        // Add color info based on clustering
+        const algorithm = (req.query.algorithm || 'kmean').toLowerCase();
+        filteredData.forEach(row => {
+            const clusterInfo = clusterData[row.id];
+            if (clusterInfo) {
+                row.color = getColor(clusterInfo[algorithm]);
+            }
+        });
         return res.json(filteredData);
     }
     return res.json([]);
@@ -96,15 +127,18 @@ app.get('/data', (req, res) => {
   const results = [];
   const algorithm = (req.query.algorithm || 'kmean').toLowerCase();
   const csvPath = path.join(__dirname, '../data', `${algorithm}_convex_hulls.csv`);
-  if (!['kmean', 'dbscan', 'hdbscan'].includes(algorithm)) {
-      return res.status(400).json({ error: 'Invalid algorithm parameter' });
-  }
+  if (!['kmean', 'dbscan', 'hdbscan'].includes(algorithm)) { return res.status(400).json({ error: 'Invalid algorithm parameter' }); }
+
   fs.createReadStream(csvPath)
     .pipe(parse({ columns: true, trim: true }))
     .on('data', (row) => {
       results.push(row);
     })
     .on('end', () => {
+      // Add color info based on cluster_id
+      results.forEach(row => {
+          row.color = getColor(row.cluster_id);
+      });
       res.json(results);
     })
     .on('error', (err) => {
