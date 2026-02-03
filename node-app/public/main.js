@@ -40,7 +40,7 @@ function loadData() {
   lastBbox = bbox;
   clearMarkers();
   const bboxParam = `${bbox.getSouth()},${bbox.getWest()},${bbox.getNorth()},${bbox.getEast()}`;
-  let url = `/data?zoom=${zoom}`;
+  let url = `/data?zoom=${zoom}&algorithm=${document.getElementById('algorithm').value}`;
   if (zoom > 17) {
     url += `&bbox=${bboxParam}`;
     fetch(url)
@@ -57,7 +57,6 @@ function loadData() {
         });
     });
   } else {
-    url += `&algorithm=${document.getElementById('algorithm').value}`;
     fetch(url)
         .then(res => res.json())
         .then(data => {
