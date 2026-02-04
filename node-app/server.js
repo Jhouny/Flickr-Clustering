@@ -57,37 +57,82 @@ const preloadCSV = (csvFile, filter=true) => {
   });
 };
 
-// Preload flickr_dataset.csv at server start
+
+// Preload CSVs in order using an async IIFE
 let flickrData = null;
-preloadCSV('data_cleaned_titles.csv').then(data => {
-    flickrData = data;
-    
-    console.log('data_cleaned_titles.csv preloaded and sorted.');
-}).catch(err => {
-    console.error('Failed to preload data_cleaned_titles.csv:', err);
-});
+let clusterData = {};
+let results = {};
+(async () => {
+    try {
+        flickrData = await preloadCSV('data_cleaned_titles.csv');
+        console.log('data_cleaned_titles.csv preloaded and sorted.');
+
+        const predictions = await preloadCSV('predictions.csv', false);
+        predictions.forEach(row => {
+            clusterData[row.id] = {
+                kmean: row.kmean,
+                dbscan: row.dbscan,
+                hdbscan: row.hdbscan
+            };
+        });
+        console.log('predictions.csv preloaded.');
+        
+        const kmeanHulls = await preloadCSV('kmean_convex_hulls.csv', false);
+        kmeanHulls.forEach(row => {
+            results[`kmean_${row.cluster_id}`] = {
+                convex_hull: row.convex_hull,
+                color: getColor(row.cluster_id)
+            };
+        });
+        const dbscanHulls = await preloadCSV('dbscan_convex_hulls.csv', false);
+        dbscanHulls.forEach(row => {
+            results[`dbscan_${row.cluster_id}`] = {
+                convex_hull: row.convex_hull,
+                color: getColor(row.cluster_id)
+            };
+        });
+        const hdbscanHulls = await preloadCSV('hdbscan_convex_hulls.csv', false);
+        hdbscanHulls.forEach(row => {
+            results[`hdbscan_${row.cluster_id}`] = {
+                convex_hull: row.convex_hull,
+                color: getColor(row.cluster_id)
+            };
+        });
+        console.log('Convex hull CSVs preloaded.');
+
+        // Preload cluster descriptions
+        const kmeanDesc = await preloadCSV('cluster_descriptions_kmean.csv', false);
+        kmeanDesc.forEach(row => {
+            if (results[`kmean_${row.cluster}`]) {
+                let description = row.words.split(' ').slice(0, 5).join(', ');
+                results[`kmean_${row.cluster}`].description = description;
+            }
+        });
+        const dbscanDesc = await preloadCSV('cluster_descriptions_dbscan.csv', false);
+        dbscanDesc.forEach(row => {
+            if (results[`dbscan_${row.cluster}`]) {
+                let description = row.words.split(' ').slice(0, 5).join(', ');
+                results[`dbscan_${row.cluster}`].description = description;
+            }
+        });
+        const hdbscanDesc = await preloadCSV('cluster_descriptions_hdbscan.csv', false);
+        hdbscanDesc.forEach(row => {
+            if (results[`hdbscan_${row.cluster}`]) {
+                let description = row.words.split(' ').slice(0, 5).join(', ');
+                results[`hdbscan_${row.cluster}`].description = description;
+            }
+        });
+        console.log('Cluster descriptions preloaded.');
+    } catch (err) {
+        console.error('Failed to preload CSVs:', err);
+    }
+})();
 
 // Create color mapping for clusters and markers
 function getColor(clusterId) {
     const colors = ['red', 'blue', 'green', 'orange', 'purple', 'cyan', 'magenta', 'yellow', 'brown', 'pink'];  // Must be usable in Leaflet markers
     return colors[Number(clusterId) % colors.length];
 }
-
-// Preload markers' clustering repartition from predictions.csv
-let clusterData = {};
-preloadCSV('predictions.csv', false).then(data => {
-    data.forEach(row => {
-        clusterData[row.id] = {
-    // Create a new map instance
-            kmean: row.kmean,
-            dbscan: row.dbscan,
-            hdbscan: row.hdbscan
-        };
-    });
-    console.log('predictions.csv preloaded.');
-}).catch(err => {
-    console.error('Failed to preload predictions.csv:', err);
-});
 
 // Endpoint to get data based on zoom level and bounding box
 const minZoomDetail = 17;
@@ -124,26 +169,27 @@ app.get('/data', (req, res) => {
     return res.json([]);
   }
   // Otherwise, load and serve the clustered dataset, ordered and filtered by n_points and zoom
-  const results = [];
   const algorithm = (req.query.algorithm || 'kmean').toLowerCase();
-  const csvPath = path.join(__dirname, '../data', `${algorithm}_convex_hulls.csv`);
   if (!['kmean', 'dbscan', 'hdbscan'].includes(algorithm)) { return res.status(400).json({ error: 'Invalid algorithm parameter' }); }
 
-  fs.createReadStream(csvPath)
-    .pipe(parse({ columns: true, trim: true }))
-    .on('data', (row) => {
-      results.push(row);
-    })
-    .on('end', () => {
-      // Add color info based on cluster_id
-      results.forEach(row => {
-          row.color = getColor(row.cluster_id);
-      });
-      res.json(results);
-    })
-    .on('error', (err) => {
-      res.status(500).json({ error: err.message });
-    });
+    const clusteredResults = [];
+    try {
+        for (const key in results) {
+            if (key.startsWith(algorithm)) {
+                const cluster_id = key.split('_')[1];
+                clusteredResults.push({
+                    cluster_id: cluster_id,
+                    convex_hull: results[key].convex_hull,
+                    color: results[key].color,
+                    description: results[key].description || ''
+                });
+            }
+        }
+        return res.json(clusteredResults);
+    } catch (err) {
+        console.error('Error processing clustered results:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 // Load image URLs from crawled flickr dataset

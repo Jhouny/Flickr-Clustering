@@ -75,7 +75,7 @@ function loadData() {
                 if (points && points.length >= 3) {
                     const latlngs = points.map(pt => [pt[0], pt[1]]);
                     const polygon = L.polygon(latlngs, { color: row.color, weight: 1, fillOpacity: 0.25 }).addTo(map)
-                    .bindPopup(`<b>Cluster ID</b>: ${cluster_id}<br>`);
+                    .bindPopup(`<b>Cluster ID</b><br>Description: ${row.description || ''}<br>`);
                     markers.push(polygon);
                 } else if (points && points.length > 0) {
                     // If less than 3 points, just plot them as markers
@@ -83,7 +83,7 @@ function loadData() {
                         const lat = pt[0];
                         const lon = pt[1];
                         const marker = L.marker([lat, lon], { icon: createColoredIcon(row.color) }).addTo(map)
-                        .bindPopup(`<b>Cluster ID</b>: ${cluster_id}<br>`);
+                        .bindPopup(`<b>Cluster ID</b><br>Description: ${row.description || ''}<br>`);
                         markers.push(marker);
                     });
                 }
